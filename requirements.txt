@@ -2,3 +2,5 @@ vncdotool
 Pillow
 twisted
 zope.interface
+Flask
+websockify
