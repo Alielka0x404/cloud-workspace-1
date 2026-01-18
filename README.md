@@ -4,6 +4,7 @@ Automated tool to connect to multiple VNC servers and capture screenshots.
 
 ## Features
 
+### Screenshot Tool
 - Parallel processing for fast bulk screenshot capture
 - Connect to multiple VNC servers from a list (supports 1000+ servers)
 - Configurable number of parallel workers
@@ -13,6 +14,16 @@ Automated tool to connect to multiple VNC servers and capture screenshots.
 - Thread-safe processing with real-time progress tracking
 - Comprehensive error handling and detailed summary reports
 - Sequential mode option for compatibility
+
+### Web Viewer
+- Beautiful web gallery to view all screenshots
+- Search and filter screenshots by IP, port, or password
+- Click to view full-size screenshots
+- One-click VNC connection through web browser
+- Integrated noVNC web client for remote access
+- Copy server info to clipboard
+- Responsive design for desktop and mobile
+- Real-time screenshot display
 
 ## Installation
 
@@ -145,6 +156,69 @@ Examples:
 - `192.168.1.100_5900-mypass.png`
 - `10.0.0.50_5901-null.png`
 
+## Web Viewer
+
+After capturing screenshots, view and manage them through the web interface.
+
+### Starting the Web Viewer
+
+```bash
+python3 web_viewer.py
+```
+
+The web interface will be available at: http://localhost:5000
+
+### Web Interface Features
+
+1. Screenshot Gallery
+   - Grid view of all captured screenshots
+   - Search by IP, port, or password
+   - Click to view full-size images
+   - Server information displayed on each card
+
+2. VNC Web Client
+   - Click "Connect VNC" to open web-based VNC client
+   - Uses noVNC for in-browser remote desktop
+   - No additional VNC client software needed
+   - Automatic password authentication
+
+### Setting Up VNC Web Client
+
+To enable the VNC web client functionality, you need websockify running:
+
+#### Option 1: For a specific server
+```bash
+websockify 6080 192.168.1.100:5900
+```
+
+#### Option 2: Use the proxy script
+```bash
+python3 vnc_proxy.py
+```
+
+Note: Each VNC connection requires websockify to proxy that specific server. When you click "Connect VNC" in the web interface, make sure to start websockify with the target server's IP and port.
+
+### Web Viewer Usage Flow
+
+1. Capture screenshots:
+```bash
+python3 vnc_screenshot.py -w 50
+```
+
+2. Start web viewer:
+```bash
+python3 web_viewer.py
+```
+
+3. Open browser to http://localhost:5000
+
+4. Browse screenshots and click "Connect VNC" to access servers
+
+5. For VNC connection, run websockify in another terminal:
+```bash
+websockify 6080 <target_ip>:<target_port>
+```
+
 ## Output Directory
 
 All screenshots are saved in the `screenshots/` directory, which is automatically created if it doesn't exist.
@@ -155,9 +229,17 @@ The tool handles connection errors gracefully and continues with the next server
 
 ## Requirements
 
+### Core Tools
 - Python 3.6+
-- vncdotool
-- Pillow
+- vncdotool (VNC client)
+- Pillow (image processing)
+- twisted (networking)
+- zope.interface (dependencies)
+
+### Web Viewer (Optional)
+- Flask (web framework)
+- websockify (WebSocket proxy for VNC)
+- Modern web browser with JavaScript enabled
 
 ## Performance
 

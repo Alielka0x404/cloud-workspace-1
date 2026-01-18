@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VNC Viewer - {{ ip }}:{{ port }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2a2a2a;
+            padding: 15px 20px;
+            border-bottom: 2px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 0.8em;
+            color: #888;
+        }
+
+        .info-value {
+            font-family: monospace;
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-connect {
+            background: #0066cc;
+            color: white;
+        }
+
+        .btn-connect:hover {
+            background: #0052a3;
+        }
+
+        .btn-disconnect {
+            background: #cc0000;
+            color: white;
+        }
+
+        .btn-disconnect:hover {
+            background: #a30000;
+        }
+
+        .btn-fullscreen {
+            background: #333;
+            color: white;
+        }
+
+        .btn-fullscreen:hover {
+            background: #444;
+        }
+
+        .status {
+            padding: 10px 20px;
+            background: #333;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .status.connecting {
+            background: #0066cc;
+        }
+
+        .status.connected {
+            background: #00cc00;
+        }
+
+        .status.error {
+            background: #cc0000;
+        }
+
+        #vnc-container {
+            width: 100%;
+            height: calc(100vh - 110px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        #vnc-screen {
+            width: 100%;
+            height: 100%;
+        }
+
+        .message {
+            text-align: center;
+            padding: 50px;
+            color: #888;
+        }
+
+        .message.error {
+            color: #cc0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="connection-info">
+            <div class="info-item">
+                <span class="info-label">IP Address</span>
+                <span class="info-value">{{ ip }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Port</span>
+                <span class="info-value">{{ port }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Password</span>
+                <span class="info-value">{{ password if password else 'null' }}</span>
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn btn-connect" id="btnConnect" onclick="connect()">Connect</button>
+            <button class="btn btn-disconnect" id="btnDisconnect" onclick="disconnect()" style="display:none;">Disconnect</button>
+            <button class="btn btn-fullscreen" onclick="toggleFullscreen()">Fullscreen</button>
+        </div>
+    </div>
+
+    <div class="status" id="status">Ready to connect</div>
+
+    <div id="vnc-container">
+        <div id="vnc-screen"></div>
+    </div>
+
+    <script type="module">
+        import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/rfb.js';
+
+        let rfb = null;
+        const ip = '{{ ip }}';
+        const port = '{{ port }}';
+        const password = '{{ password }}';
+
+        window.connect = function() {
+            const statusEl = document.getElementById('status');
+            const vncScreen = document.getElementById('vnc-screen');
+
+            vncScreen.innerHTML = '';
+
+            statusEl.textContent = 'Connecting...';
+            statusEl.className = 'status connecting';
+
+            try {
+                const wsUrl = `ws://${window.location.hostname}:6080`;
+
+                rfb = new RFB(vncScreen, wsUrl, {
+                    credentials: { password: password !== 'null' ? password : '' }
+                });
+
+                rfb.addEventListener('connect', () => {
+                    statusEl.textContent = `Connected to ${ip}:${port}`;
+                    statusEl.className = 'status connected';
+                    document.getElementById('btnConnect').style.display = 'none';
+                    document.getElementById('btnDisconnect').style.display = 'inline-block';
+                });
+
+                rfb.addEventListener('disconnect', (e) => {
+                    statusEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection failed';
+                    statusEl.className = 'status';
+                    document.getElementById('btnConnect').style.display = 'inline-block';
+                    document.getElementById('btnDisconnect').style.display = 'none';
+                });
+
+                rfb.scaleViewport = true;
+                rfb.resizeSession = true;
+
+            } catch (err) {
+                statusEl.textContent = `Error: ${err.message}`;
+                statusEl.className = 'status error';
+
+                vncScreen.innerHTML = `
+                    <div class="message error">
+                        <h2>Connection Error</h2>
+                        <p>${err.message}</p>
+                        <p style="margin-top: 20px;">Make sure websockify is running:</p>
+                        <p style="font-family: monospace; margin-top: 10px;">
+                            websockify 6080 ${ip}:${port}
+                        </p>
+                    </div>
+                `;
+            }
+        };
+
+        window.disconnect = function() {
+            if (rfb) {
+                rfb.disconnect();
+                rfb = null;
+            }
+        };
+
+        window.toggleFullscreen = function() {
+            const container = document.getElementById('vnc-container');
+            if (!document.fullscreenElement) {
+                container.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        };
+
+        window.addEventListener('beforeunload', () => {
+            if (rfb) {
+                rfb.disconnect();
+            }
+        });
+    </script>
+</body>
+</html>

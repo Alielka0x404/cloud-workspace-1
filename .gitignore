@@ -3,3 +3,6 @@ screenshots/
 __pycache__/
 venv/
 .env
+.flask_session/
+instance/
+*.log
