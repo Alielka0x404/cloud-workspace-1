@@ -90,16 +90,19 @@ def start_websockify(target_ip, target_port, password=None):
         print(f"Starting websockify on port {ws_port} -> {target}")
 
         process = subprocess.Popen(
-            ['websockify', '--web=/usr/share/novnc', str(ws_port), target],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            ['websockify', str(ws_port), target],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             start_new_session=True
         )
 
-        time.sleep(0.5)
+        time.sleep(1.0)
 
         if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            error_msg = stderr.decode() if stderr else stdout.decode()
             print(f"Failed to start websockify on port {ws_port}")
+            print(f"Error: {error_msg}")
             return None
 
         proxy_info = {
