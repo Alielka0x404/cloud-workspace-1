@@ -6,6 +6,7 @@ import time
 import argparse
 import threading
 import socket
+import gc
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from vncdotool import api
 from datetime import datetime
@@ -16,6 +17,8 @@ DEFAULT_WORKERS = 10
 CONNECTION_TIMEOUT = 15
 
 print_lock = threading.Lock()
+connection_count = 0
+count_lock = threading.Lock()
 
 def create_screenshot_dir():
     if not os.path.exists(SCREENSHOT_DIR):
@@ -54,6 +57,8 @@ def safe_print(*args, **kwargs):
         print(*args, **kwargs)
 
 def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTION_TIMEOUT):
+    global connection_count
+
     ip = server_info["ip"]
     port = server_info["port"]
     password = server_info["password"]
@@ -62,6 +67,7 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
     prefix = f"[{index}/{total}]" if index and total else ""
 
     old_timeout = socket.getdefaulttimeout()
+    client = None
 
     try:
         connection_string = f"{ip}::{port}"
@@ -90,9 +96,12 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
 
         client.captureScreen(filepath)
 
-        client.disconnect()
-
         safe_print(f"{prefix} SUCCESS: {ip}:{port} -> {filename}")
+
+        with count_lock:
+            connection_count += 1
+            if connection_count % 50 == 0:
+                gc.collect()
 
         return (True, server_info, None)
 
@@ -106,7 +115,14 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
         safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
         return (False, server_info, str(e))
     finally:
+        if client:
+            try:
+                client.disconnect()
+            except:
+                pass
+            del client
         socket.setdefaulttimeout(old_timeout)
+        gc.collect()
 
 def main():
     parser = argparse.ArgumentParser(description='VNC Screenshot Tool with Parallel Processing')
