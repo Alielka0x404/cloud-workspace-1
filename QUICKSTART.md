@@ -31,6 +31,12 @@ For 1000+ servers (100 workers):
 python3 vnc_screenshot.py -w 100
 ```
 
+If servers are hanging (not responding):
+```bash
+python3 vnc_screenshot.py -w 100 -t 10
+```
+This sets a 10-second timeout per server.
+
 ## 4. View in Web Browser
 
 ```bash
@@ -55,6 +61,8 @@ No manual setup required!
 
 - Screenshots are saved in `screenshots/` directory
 - Increase workers (-w) for faster bulk processing
+- Lower timeout (-t) if servers are hanging (default: 15s)
+- Tool automatically skips unresponsive servers after timeout
 - Search screenshots by IP, port, or password in web UI
 - Click screenshots to view full size
 - Use "Copy Info" to copy server details

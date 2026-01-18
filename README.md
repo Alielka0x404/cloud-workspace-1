@@ -129,11 +129,27 @@ Use a different server list file:
 python3 vnc_screenshot.py -f my_servers.txt -w 100
 ```
 
+### Connection Timeout
+
+Set custom timeout for unresponsive servers (prevents hanging):
+
+```bash
+python3 vnc_screenshot.py -t 10
+```
+
+The default timeout is 15 seconds. If a server doesn't respond within this time, the connection will fail and move to the next server. This prevents the tool from hanging on dead or unresponsive servers.
+
+Recommended timeouts:
+- Fast local network: 5-10 seconds
+- Internet servers: 15-30 seconds
+- Slow/unreliable connections: 30-60 seconds
+
 ### Command Line Options
 
 ```
 -w, --workers NUM      Number of parallel workers (default: 10)
 -f, --file FILE        VNC server list file (default: vnc.txt)
+-t, --timeout SEC      Connection timeout in seconds (default: 15)
 --no-parallel          Disable parallel processing
 -h, --help             Show help message
 ```

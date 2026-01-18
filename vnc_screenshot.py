@@ -5,13 +5,15 @@ import sys
 import time
 import argparse
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from vncdotool import api
 from datetime import datetime
 
 SCREENSHOT_DIR = "screenshots"
 VNC_FILE = "vnc.txt"
 DEFAULT_WORKERS = 10
+CONNECTION_TIMEOUT = 15
 
 print_lock = threading.Lock()
 
@@ -51,7 +53,7 @@ def safe_print(*args, **kwargs):
     with print_lock:
         print(*args, **kwargs)
 
-def connect_and_screenshot(server_info, index=None, total=None):
+def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTION_TIMEOUT):
     ip = server_info["ip"]
     port = server_info["port"]
     password = server_info["password"]
@@ -59,12 +61,22 @@ def connect_and_screenshot(server_info, index=None, total=None):
 
     prefix = f"[{index}/{total}]" if index and total else ""
 
+    old_timeout = socket.getdefaulttimeout()
+
     try:
         connection_string = f"{ip}::{port}"
 
         safe_print(f"{prefix} Connecting to {ip}:{port}...")
 
+        socket.setdefaulttimeout(timeout)
+
+        start_time = time.time()
+
         client = api.connect(connection_string, password=password)
+
+        elapsed = time.time() - start_time
+        if elapsed > timeout:
+            raise TimeoutError(f"Connection took too long: {elapsed:.1f}s")
 
         time.sleep(2)
 
@@ -84,9 +96,17 @@ def connect_and_screenshot(server_info, index=None, total=None):
 
         return (True, server_info, None)
 
+    except socket.timeout:
+        safe_print(f"{prefix} FAILED: {ip}:{port} - Connection timeout ({timeout}s)")
+        return (False, server_info, f"Connection timeout ({timeout}s)")
+    except TimeoutError as e:
+        safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
+        return (False, server_info, str(e))
     except Exception as e:
         safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
         return (False, server_info, str(e))
+    finally:
+        socket.setdefaulttimeout(old_timeout)
 
 def main():
     parser = argparse.ArgumentParser(description='VNC Screenshot Tool with Parallel Processing')
@@ -94,6 +114,8 @@ def main():
                         help=f'Number of parallel workers (default: {DEFAULT_WORKERS})')
     parser.add_argument('-f', '--file', type=str, default=VNC_FILE,
                         help=f'VNC server list file (default: {VNC_FILE})')
+    parser.add_argument('-t', '--timeout', type=int, default=CONNECTION_TIMEOUT,
+                        help=f'Connection timeout in seconds (default: {CONNECTION_TIMEOUT})')
     parser.add_argument('--no-parallel', action='store_true',
                         help='Disable parallel processing (sequential mode)')
     args = parser.parse_args()
@@ -128,9 +150,11 @@ def main():
 
     total_servers = len(servers)
     workers = 1 if args.no_parallel else args.workers
+    timeout = args.timeout
 
     print(f"Total servers: {total_servers}")
     print(f"Parallel workers: {workers}")
+    print(f"Connection timeout: {timeout}s")
     print(f"Screenshot directory: {SCREENSHOT_DIR}/")
     print("=" * 60)
     print()
@@ -143,7 +167,7 @@ def main():
 
     if args.no_parallel:
         for i, server in enumerate(servers, 1):
-            result = connect_and_screenshot(server, i, total_servers)
+            result = connect_and_screenshot(server, i, total_servers, timeout)
             if result[0]:
                 successful += 1
             else:
@@ -152,7 +176,7 @@ def main():
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_server = {
-                executor.submit(connect_and_screenshot, server, i, total_servers): (server, i)
+                executor.submit(connect_and_screenshot, server, i, total_servers, timeout): (server, i)
                 for i, server in enumerate(servers, 1)
             }
 
