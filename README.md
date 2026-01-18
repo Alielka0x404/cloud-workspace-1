@@ -177,26 +177,33 @@ The web interface will be available at: http://localhost:5000
    - Server information displayed on each card
 
 2. VNC Web Client
-   - Click "Connect VNC" to open web-based VNC client
+   - One-click VNC connection (no manual setup!)
+   - Automatic websockify proxy management
    - Uses noVNC for in-browser remote desktop
    - No additional VNC client software needed
    - Automatic password authentication
+   - Auto-connects within 1-2 seconds
+   - Proxy auto-cleanup after 5 minutes
 
-### Setting Up VNC Web Client
+### VNC Web Client - Automatic Setup
 
-To enable the VNC web client functionality, you need websockify running:
+The web viewer now **automatically manages websockify** for you! No manual setup required.
 
-#### Option 1: For a specific server
+#### How It Works
+
+1. Click "Connect VNC" button on any screenshot
+2. Backend automatically starts a websockify proxy for that specific server
+3. VNC viewer opens in new window and auto-connects
+4. Proxy automatically cleans up after 5 minutes
+
+#### Requirements
+
+Make sure websockify is installed:
 ```bash
-websockify 6080 192.168.1.100:5900
+pip install websockify
 ```
 
-#### Option 2: Use the proxy script
-```bash
-python3 vnc_proxy.py
-```
-
-Note: Each VNC connection requires websockify to proxy that specific server. When you click "Connect VNC" in the web interface, make sure to start websockify with the target server's IP and port.
+That's it! The system handles everything else automatically.
 
 ### Web Viewer Usage Flow
 
@@ -212,12 +219,9 @@ python3 web_viewer.py
 
 3. Open browser to http://localhost:5000
 
-4. Browse screenshots and click "Connect VNC" to access servers
+4. Browse screenshots and click "Connect VNC" to instantly access servers
 
-5. For VNC connection, run websockify in another terminal:
-```bash
-websockify 6080 <target_ip>:<target_port>
-```
+No manual websockify commands needed!
 
 ## Output Directory
 

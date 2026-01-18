@@ -172,6 +172,9 @@
         const port = '{{ port }}';
         const password = '{{ password }}';
 
+        const urlParams = new URLSearchParams(window.location.search);
+        const wsPort = urlParams.get('ws_port') || '6080';
+
         window.connect = function() {
             const statusEl = document.getElementById('status');
             const vncScreen = document.getElementById('vnc-screen');
@@ -182,7 +185,7 @@
             statusEl.className = 'status connecting';
 
             try {
-                const wsUrl = `ws://${window.location.hostname}:6080`;
+                const wsUrl = `ws://${window.location.hostname}:${wsPort}`;
 
                 rfb = new RFB(vncScreen, wsUrl, {
                     credentials: { password: password !== 'null' ? password : '' }
@@ -213,9 +216,11 @@
                     <div class="message error">
                         <h2>Connection Error</h2>
                         <p>${err.message}</p>
-                        <p style="margin-top: 20px;">Make sure websockify is running:</p>
-                        <p style="font-family: monospace; margin-top: 10px;">
-                            websockify 6080 ${ip}:${port}
+                        <p style="margin-top: 20px;">Websockify proxy port: ${wsPort}</p>
+                        <p style="margin-top: 10px;">Target: ${ip}:${port}</p>
+                        <p style="margin-top: 20px; color: #888;">
+                            The proxy should have started automatically.
+                            If this error persists, make sure websockify is installed.
                         </p>
                     </div>
                 `;
@@ -242,6 +247,12 @@
             if (rfb) {
                 rfb.disconnect();
             }
+        });
+
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                connect();
+            }, 1500);
         });
     </script>
 </body>

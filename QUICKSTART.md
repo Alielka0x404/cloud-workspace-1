@@ -39,15 +39,17 @@ python3 web_viewer.py
 
 Open: http://localhost:5000
 
-## 5. Connect to VNC (Optional)
+## 5. Connect to VNC
 
-To use the web VNC client, run websockify in another terminal:
+Just click "Connect VNC" in the web interface!
 
-```bash
-websockify 6080 192.168.1.100:5900
-```
+The system automatically:
+- Starts websockify proxy for that server
+- Opens VNC viewer in new window
+- Connects with the saved password
+- Auto-connects within 1-2 seconds
 
-Then click "Connect VNC" in the web interface.
+No manual setup required!
 
 ## Tips
 
@@ -56,3 +58,5 @@ Then click "Connect VNC" in the web interface.
 - Search screenshots by IP, port, or password in web UI
 - Click screenshots to view full size
 - Use "Copy Info" to copy server details
+- VNC connections auto-cleanup after 5 minutes
+- websockify must be installed (included in requirements.txt)

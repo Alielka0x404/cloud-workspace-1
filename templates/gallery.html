@@ -288,9 +288,34 @@
             displayScreenshots(filtered);
         }
 
-        function connectVNC(ip, port, password) {
-            const url = `/vnc/${ip}/${port}?password=${encodeURIComponent(password)}`;
-            window.open(url, '_blank', 'width=1024,height=768');
+        async function connectVNC(ip, port, password) {
+            showToast('Starting VNC connection...');
+
+            try {
+                const response = await fetch('/api/vnc/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ip: ip,
+                        port: port,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(`Connected! Opening VNC viewer...`);
+                    const url = `/vnc/${ip}/${port}?password=${encodeURIComponent(password)}&ws_port=${data.websockify_port}`;
+                    window.open(url, '_blank', 'width=1024,height=768');
+                } else {
+                    showToast('Error: ' + (data.error || 'Failed to start VNC connection'));
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message);
+            }
         }
 
         function copyInfo(info) {
