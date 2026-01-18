@@ -31,6 +31,12 @@ For 1000+ servers (100 workers):
 python3 vnc_screenshot.py -w 100
 ```
 
+If servers are hanging (not responding):
+```bash
+python3 vnc_screenshot.py -w 100 -t 10
+```
+This sets a 10-second timeout per server.
+
 ## 4. View in Web Browser
 
 ```bash
@@ -39,20 +45,26 @@ python3 web_viewer.py
 
 Open: http://localhost:5000
 
-## 5. Connect to VNC (Optional)
+## 5. Connect to VNC
 
-To use the web VNC client, run websockify in another terminal:
+Just click "Connect VNC" in the web interface!
 
-```bash
-websockify 6080 192.168.1.100:5900
-```
+The system automatically:
+- Starts websockify proxy for that server
+- Opens VNC viewer in new window
+- Connects with the saved password
+- Auto-connects within 1-2 seconds
 
-Then click "Connect VNC" in the web interface.
+No manual setup required!
 
 ## Tips
 
 - Screenshots are saved in `screenshots/` directory
 - Increase workers (-w) for faster bulk processing
+- Lower timeout (-t) if servers are hanging (default: 15s)
+- Tool automatically skips unresponsive servers after timeout
 - Search screenshots by IP, port, or password in web UI
 - Click screenshots to view full size
 - Use "Copy Info" to copy server details
+- VNC connections auto-cleanup after 5 minutes
+- websockify must be installed (included in requirements.txt)
