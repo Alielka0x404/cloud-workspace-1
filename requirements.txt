@@ -1,2 +1,4 @@
-vncdotool==1.2.0
-Pillow==10.1.0
+vncdotool
+Pillow
+twisted
+zope.interface

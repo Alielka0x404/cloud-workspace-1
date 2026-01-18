@@ -12,10 +12,37 @@ Automated tool to connect to multiple VNC servers and capture screenshots.
 
 ## Installation
 
-Install required dependencies:
+### Method 1: Install from requirements.txt
 
 ```bash
 pip install -r requirements.txt
+```
+
+### Method 2: Install packages individually
+
+If you encounter build errors, try installing packages one by one:
+
+```bash
+pip install Pillow
+pip install twisted
+pip install zope.interface
+pip install vncdotool
+```
+
+### Method 3: Use pre-built wheels (Windows)
+
+If installation fails on Windows, try:
+
+```bash
+pip install --upgrade pip setuptools wheel
+pip install --no-cache-dir vncdotool
+```
+
+### Method 4: Install from GitHub (latest version)
+
+```bash
+pip install Pillow twisted zope.interface
+pip install git+https://github.com/sibson/vncdotool.git
 ```
 
 ## Configuration
@@ -89,3 +116,35 @@ The tool handles connection errors gracefully and continues with the next server
 - The tool waits 2 seconds between servers to avoid overwhelming the network
 - Connection timeout is handled by vncdotool defaults
 - Comments in vnc.txt start with # and are ignored
+
+## Troubleshooting
+
+### Installation Issues on Windows
+
+If you get "subprocess-exited-with-error" or "KeyError: '__version__'" errors:
+
+1. Upgrade pip and build tools:
+```bash
+python -m pip install --upgrade pip setuptools wheel
+```
+
+2. Install Microsoft C++ Build Tools (if needed):
+   - Download from: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+   - Install "Desktop development with C++" workload
+
+3. Try installing without cache:
+```bash
+pip install --no-cache-dir --upgrade Pillow twisted zope.interface vncdotool
+```
+
+4. Use the latest vncdotool from GitHub:
+```bash
+pip install git+https://github.com/sibson/vncdotool.git
+```
+
+### Connection Issues
+
+- Ensure VNC server is running and accessible
+- Check firewall settings allow VNC port
+- Verify credentials are correct
+- Try connecting with a VNC client first to confirm server works
