@@ -3,11 +3,17 @@
 import os
 import sys
 import time
+import argparse
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from vncdotool import api
 from datetime import datetime
 
 SCREENSHOT_DIR = "screenshots"
 VNC_FILE = "vnc.txt"
+DEFAULT_WORKERS = 10
+
+print_lock = threading.Lock()
 
 def create_screenshot_dir():
     if not os.path.exists(SCREENSHOT_DIR):
@@ -41,58 +47,65 @@ def parse_vnc_line(line):
         "hostname": hostname
     }
 
-def connect_and_screenshot(server_info):
+def safe_print(*args, **kwargs):
+    with print_lock:
+        print(*args, **kwargs)
+
+def connect_and_screenshot(server_info, index=None, total=None):
     ip = server_info["ip"]
     port = server_info["port"]
     password = server_info["password"]
     hostname = server_info["hostname"]
 
-    print(f"\n{'='*60}")
-    print(f"Connecting to: {ip}:{port}")
-    if hostname:
-        print(f"Hostname: {hostname}")
-    print(f"{'='*60}")
+    prefix = f"[{index}/{total}]" if index and total else ""
 
     try:
         connection_string = f"{ip}::{port}"
 
+        safe_print(f"{prefix} Connecting to {ip}:{port}...")
+
         client = api.connect(connection_string, password=password)
 
-        print("Connected successfully!")
-        print("Waiting 2 seconds for connection to stabilize...")
         time.sleep(2)
 
-        print("Sending key press to wake screen...")
         client.keyPress("space")
 
-        print("Waiting 1 second for screen to update...")
         time.sleep(1)
 
         pass_str = password if password else "null"
         filename = f"{ip}_{port}-{pass_str}.png"
         filepath = os.path.join(SCREENSHOT_DIR, filename)
 
-        print(f"Taking screenshot...")
         client.captureScreen(filepath)
 
-        print(f"Screenshot saved: {filepath}")
-
         client.disconnect()
-        print("Disconnected")
 
-        return True
+        safe_print(f"{prefix} SUCCESS: {ip}:{port} -> {filename}")
+
+        return (True, server_info, None)
 
     except Exception as e:
-        print(f"Error: {str(e)}")
-        return False
+        safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
+        return (False, server_info, str(e))
 
 def main():
-    print("VNC Screenshot Tool")
+    parser = argparse.ArgumentParser(description='VNC Screenshot Tool with Parallel Processing')
+    parser.add_argument('-w', '--workers', type=int, default=DEFAULT_WORKERS,
+                        help=f'Number of parallel workers (default: {DEFAULT_WORKERS})')
+    parser.add_argument('-f', '--file', type=str, default=VNC_FILE,
+                        help=f'VNC server list file (default: {VNC_FILE})')
+    parser.add_argument('--no-parallel', action='store_true',
+                        help='Disable parallel processing (sequential mode)')
+    args = parser.parse_args()
+
+    print("VNC Screenshot Tool - Parallel Mode")
     print("=" * 60)
 
-    if not os.path.exists(VNC_FILE):
-        print(f"Error: {VNC_FILE} not found!")
-        print(f"Create a {VNC_FILE} file with format:")
+    vnc_file = args.file
+
+    if not os.path.exists(vnc_file):
+        print(f"Error: {vnc_file} not found!")
+        print(f"Create a {vnc_file} file with format:")
         print("ip:port-password-hostname")
         print("Example: 192.168.1.100:5900-mypass-server1")
         print("Use 'null' for no password: 192.168.1.100:5900-null-server2")
@@ -100,7 +113,7 @@ def main():
 
     create_screenshot_dir()
 
-    with open(VNC_FILE, "r") as f:
+    with open(vnc_file, "r") as f:
         lines = f.readlines()
 
     servers = []
@@ -113,30 +126,70 @@ def main():
         print("No valid servers found in vnc.txt")
         sys.exit(1)
 
-    print(f"\nFound {len(servers)} server(s) to process\n")
+    total_servers = len(servers)
+    workers = 1 if args.no_parallel else args.workers
+
+    print(f"Total servers: {total_servers}")
+    print(f"Parallel workers: {workers}")
+    print(f"Screenshot directory: {SCREENSHOT_DIR}/")
+    print("=" * 60)
+    print()
+
+    start_time = time.time()
 
     successful = 0
     failed = 0
+    failed_servers = []
 
-    for i, server in enumerate(servers, 1):
-        print(f"\nProcessing server {i}/{len(servers)}")
-        if connect_and_screenshot(server):
-            successful += 1
-        else:
-            failed += 1
+    if args.no_parallel:
+        for i, server in enumerate(servers, 1):
+            result = connect_and_screenshot(server, i, total_servers)
+            if result[0]:
+                successful += 1
+            else:
+                failed += 1
+                failed_servers.append((server, result[2]))
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_to_server = {
+                executor.submit(connect_and_screenshot, server, i, total_servers): (server, i)
+                for i, server in enumerate(servers, 1)
+            }
 
-        if i < len(servers):
-            print("\nWaiting 2 seconds before next server...")
-            time.sleep(2)
+            for future in as_completed(future_to_server):
+                server, index = future_to_server[future]
+                try:
+                    result = future.result()
+                    if result[0]:
+                        successful += 1
+                    else:
+                        failed += 1
+                        failed_servers.append((result[1], result[2]))
+                except Exception as exc:
+                    failed += 1
+                    safe_print(f"[{index}/{total_servers}] ERROR: {server['ip']}:{server['port']} - {exc}")
+                    failed_servers.append((server, str(exc)))
 
-    print(f"\n{'='*60}")
-    print("Summary")
-    print(f"{'='*60}")
-    print(f"Total servers: {len(servers)}")
+    elapsed_time = time.time() - start_time
+
+    print()
+    print("=" * 60)
+    print("SUMMARY")
+    print("=" * 60)
+    print(f"Total servers: {total_servers}")
     print(f"Successful: {successful}")
     print(f"Failed: {failed}")
+    print(f"Time elapsed: {elapsed_time:.2f} seconds")
+    print(f"Average time per server: {elapsed_time/total_servers:.2f} seconds")
     print(f"Screenshots saved in: {SCREENSHOT_DIR}/")
-    print(f"{'='*60}")
+
+    if failed_servers:
+        print()
+        print("FAILED SERVERS:")
+        for server, error in failed_servers:
+            print(f"  - {server['ip']}:{server['port']} - {error}")
+
+    print("=" * 60)
 
 if __name__ == "__main__":
     main()
