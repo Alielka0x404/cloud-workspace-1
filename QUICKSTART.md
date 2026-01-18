@@ -68,3 +68,20 @@ No manual setup required!
 - Use "Copy Info" to copy server details
 - VNC connections auto-cleanup after 5 minutes
 - websockify must be installed (included in requirements.txt)
+
+## Troubleshooting Crashes
+
+If the tool crashes after ~250 servers:
+
+**Solution 1: Reduce workers**
+```bash
+python3 vnc_screenshot.py -w 20  # Use fewer workers
+```
+
+**Solution 2: Process in batches**
+```bash
+head -500 vnc.txt > batch1.txt
+python3 vnc_screenshot.py -f batch1.txt -w 50
+```
+
+The tool now auto-cleans resources every 50 connections to prevent crashes.

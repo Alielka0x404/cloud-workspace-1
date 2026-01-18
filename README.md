@@ -318,3 +318,37 @@ pip install git+https://github.com/sibson/vncdotool.git
 - Check firewall settings allow VNC port
 - Verify credentials are correct
 - Try connecting with a VNC client first to confirm server works
+
+### Tool Crashes After Many Connections
+
+If the tool crashes after processing 200-300 servers:
+
+1. **Reduce worker count** - Lower the number of parallel workers:
+```bash
+python3 vnc_screenshot.py -w 20   # Instead of -w 100
+```
+
+2. **Process in batches** - Split your vnc.txt into smaller files:
+```bash
+# First 500 servers
+head -500 vnc.txt > vnc_batch1.txt
+python3 vnc_screenshot.py -f vnc_batch1.txt -w 50
+
+# Next 500 servers
+tail -n +501 vnc.txt | head -500 > vnc_batch2.txt
+python3 vnc_screenshot.py -f vnc_batch2.txt -w 50
+```
+
+3. **Increase system limits** (Linux/Mac):
+```bash
+ulimit -n 4096  # Increase file descriptor limit
+```
+
+4. **Monitor resources** - Check memory and file descriptor usage:
+```bash
+# Linux
+watch -n 1 'ps aux | grep vnc_screenshot'
+lsof -p <pid> | wc -l  # Count open file descriptors
+```
+
+The tool now includes automatic garbage collection every 50 connections and proper resource cleanup to prevent crashes.
