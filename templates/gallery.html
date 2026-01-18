@@ -197,6 +197,70 @@
             display: none;
             z-index: 2000;
         }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            padding: 30px 0;
+            margin-top: 20px;
+        }
+
+        .pagination-btn {
+            padding: 10px 20px;
+            border: 2px solid #333;
+            background: #2a2a2a;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            background: #0066cc;
+            border-color: #0066cc;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: #888;
+            font-size: 1em;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .page-size {
+            padding: 8px 12px;
+            border: 2px solid #333;
+            background: #2a2a2a;
+            color: #fff;
+            border-radius: 5px;
+            font-size: 0.9em;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .page-size:hover {
+            border-color: #0066cc;
+        }
+
+        .page-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .page-controls label {
+            color: #888;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
@@ -213,6 +277,22 @@
         <div class="loading">Loading screenshots...</div>
     </div>
 
+    <div class="pagination">
+        <div class="page-controls">
+            <label>Per page:</label>
+            <select class="page-size" id="pageSize" onchange="changePageSize()">
+                <option value="20">20</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+        <button class="pagination-btn" id="prevBtn" onclick="previousPage()">⬅ Previous</button>
+        <div class="pagination-info" id="pageInfo">Page 1 of 1</div>
+        <button class="pagination-btn" id="nextBtn" onclick="nextPage()">Next ➡</button>
+    </div>
+
     <div class="modal" id="imageModal">
         <span class="modal-close" onclick="closeModal()">&times;</span>
         <img class="modal-content" id="modalImage">
@@ -222,20 +302,34 @@
 
     <script>
         let allScreenshots = [];
+        let filteredScreenshots = [];
+        let currentPage = 1;
+        let pageSize = 50;
 
         async function loadScreenshots() {
             try {
                 const response = await fetch('/api/screenshots');
                 const data = await response.json();
                 allScreenshots = data.screenshots;
+                filteredScreenshots = allScreenshots;
 
-                document.getElementById('stats').textContent = `Total: ${data.total} screenshots`;
-                displayScreenshots(allScreenshots);
+                document.getElementById('stats').textContent = `Total: ${data.total} screenshots | Showing ${pageSize} per page`;
+                currentPage = 1;
+                displayCurrentPage();
             } catch (error) {
                 document.getElementById('gallery').innerHTML = `
                     <div class="no-results">Error loading screenshots: ${error.message}</div>
                 `;
             }
+        }
+
+        function displayCurrentPage() {
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const pageScreenshots = filteredScreenshots.slice(startIndex, endIndex);
+
+            displayScreenshots(pageScreenshots);
+            updatePaginationControls();
         }
 
         function displayScreenshots(screenshots) {
@@ -280,12 +374,48 @@
 
         function searchScreenshots() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allScreenshots.filter(shot =>
+            filteredScreenshots = allScreenshots.filter(shot =>
                 shot.ip.toLowerCase().includes(searchTerm) ||
                 shot.port.includes(searchTerm) ||
                 shot.display_password.toLowerCase().includes(searchTerm)
             );
-            displayScreenshots(filtered);
+            currentPage = 1;
+            displayCurrentPage();
+        }
+
+        function updatePaginationControls() {
+            const totalPages = Math.ceil(filteredScreenshots.length / pageSize);
+            const pageInfo = document.getElementById('pageInfo');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages} (${filteredScreenshots.length} items)`;
+
+            prevBtn.disabled = currentPage === 1;
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(filteredScreenshots.length / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayCurrentPage();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                displayCurrentPage();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            displayCurrentPage();
         }
 
         async function connectVNC(ip, port, password) {
@@ -347,6 +477,16 @@
         document.getElementById('imageModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+
+            if (e.key === 'ArrowLeft') {
+                previousPage();
+            } else if (e.key === 'ArrowRight') {
+                nextPage();
             }
         });
 
