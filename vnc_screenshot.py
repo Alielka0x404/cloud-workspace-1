@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
+"""
+VNC Screenshot Tool - Process-per-connection version
+Each VNC connection runs in a completely isolated subprocess to avoid
+Twisted reactor threading issues.
+"""
 
 import os
 import sys
 import time
 import argparse
-import threading
-import socket
-import gc
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-from vncdotool import api
+import json
+from multiprocessing import Pool
 from datetime import datetime
 
 SCREENSHOT_DIR = "screenshots"
@@ -16,14 +18,9 @@ VNC_FILE = "vnc.txt"
 DEFAULT_WORKERS = 10
 CONNECTION_TIMEOUT = 15
 
-print_lock = threading.Lock()
-connection_count = 0
-count_lock = threading.Lock()
-
 def create_screenshot_dir():
     if not os.path.exists(SCREENSHOT_DIR):
         os.makedirs(SCREENSHOT_DIR)
-        print(f"Created directory: {SCREENSHOT_DIR}")
 
 def parse_vnc_line(line):
     line = line.strip()
@@ -32,7 +29,6 @@ def parse_vnc_line(line):
 
     parts = line.split("-")
     if len(parts) < 2:
-        print(f"Invalid format: {line}")
         return None
 
     ip_port = parts[0].strip()
@@ -40,7 +36,6 @@ def parse_vnc_line(line):
     hostname = parts[2].strip() if len(parts) > 2 else ""
 
     if ":" not in ip_port:
-        print(f"Invalid IP:PORT format: {ip_port}")
         return None
 
     ip, port = ip_port.split(":", 1)
@@ -52,80 +47,70 @@ def parse_vnc_line(line):
         "hostname": hostname
     }
 
-def safe_print(*args, **kwargs):
-    with print_lock:
-        print(*args, **kwargs)
-
-def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTION_TIMEOUT):
-    global connection_count
-
+def single_vnc_connection(args):
+    """
+    This function runs in a SEPARATE PROCESS.
+    Each process gets its own Twisted reactor, avoiding all threading issues.
+    """
+    server_info, index, total, timeout, screenshot_dir = args
+    
     ip = server_info["ip"]
     port = server_info["port"]
     password = server_info["password"]
-    hostname = server_info["hostname"]
-
-    prefix = f"[{index}/{total}]" if index and total else ""
-
-    old_timeout = socket.getdefaulttimeout()
+    
+    prefix = f"[{index}/{total}]"
+    
+    # Import inside the function so each process gets fresh imports
+    import socket
+    
+    try:
+        from vncdotool import api
+    except ImportError:
+        return (False, server_info, "vncdotool not installed")
+    
     client = None
-
+    old_timeout = socket.getdefaulttimeout()
+    
     try:
         connection_string = f"{ip}::{port}"
-
-        safe_print(f"{prefix} Connecting to {ip}:{port}...")
-
-        socket.setdefaulttimeout(timeout)
-
-        start_time = time.time()
-
-        client = api.connect(connection_string, password=password)
-
-        elapsed = time.time() - start_time
-        if elapsed > timeout:
-            raise TimeoutError(f"Connection took too long: {elapsed:.1f}s")
-
-        time.sleep(2)
-
-        client.keyPress("space")
-
-        time.sleep(1)
-
         pass_str = password if password else "null"
         filename = f"{ip}_{port}-{pass_str}.png"
-        filepath = os.path.join(SCREENSHOT_DIR, filename)
-
+        filepath = os.path.join(screenshot_dir, filename)
+        
+        print(f"{prefix} Connecting to {ip}:{port}...", flush=True)
+        
+        socket.setdefaulttimeout(timeout)
+        
+        client = api.connect(connection_string, password=password)
+        
+        time.sleep(2)
+        client.keyPress("space")
+        time.sleep(1)
+        
         client.captureScreen(filepath)
-
-        safe_print(f"{prefix} SUCCESS: {ip}:{port} -> {filename}")
-
-        with count_lock:
-            connection_count += 1
-            if connection_count % 50 == 0:
-                gc.collect()
-
+        
+        print(f"{prefix} SUCCESS: {ip}:{port} -> {filename}", flush=True)
         return (True, server_info, None)
-
+        
     except socket.timeout:
-        safe_print(f"{prefix} FAILED: {ip}:{port} - Connection timeout ({timeout}s)")
-        return (False, server_info, f"Connection timeout ({timeout}s)")
-    except TimeoutError as e:
-        safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
-        return (False, server_info, str(e))
+        print(f"{prefix} FAILED: {ip}:{port} - Timeout ({timeout}s)", flush=True)
+        return (False, server_info, f"Timeout ({timeout}s)")
     except Exception as e:
-        safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
-        return (False, server_info, str(e))
+        error_msg = str(e)
+        if len(error_msg) > 100:
+            error_msg = error_msg[:100] + "..."
+        print(f"{prefix} FAILED: {ip}:{port} - {error_msg}", flush=True)
+        return (False, server_info, error_msg)
     finally:
         if client:
             try:
                 client.disconnect()
             except:
                 pass
-            del client
         socket.setdefaulttimeout(old_timeout)
-        gc.collect()
 
 def main():
-    parser = argparse.ArgumentParser(description='VNC Screenshot Tool with Parallel Processing')
+    parser = argparse.ArgumentParser(description='VNC Screenshot Tool - Process Isolation Version')
     parser.add_argument('-w', '--workers', type=int, default=DEFAULT_WORKERS,
                         help=f'Number of parallel workers (default: {DEFAULT_WORKERS})')
     parser.add_argument('-f', '--file', type=str, default=VNC_FILE,
@@ -133,82 +118,68 @@ def main():
     parser.add_argument('-t', '--timeout', type=int, default=CONNECTION_TIMEOUT,
                         help=f'Connection timeout in seconds (default: {CONNECTION_TIMEOUT})')
     parser.add_argument('--no-parallel', action='store_true',
-                        help='Disable parallel processing (sequential mode)')
+                        help='Disable parallel processing')
+    parser.add_argument('--maxtasksperchild', type=int, default=5,
+                        help='Restart worker after N tasks (prevents memory leaks)')
     args = parser.parse_args()
 
-    print("VNC Screenshot Tool - Parallel Mode")
+    print("VNC Screenshot Tool - Process Isolation Version")
     print("=" * 60)
 
-    vnc_file = args.file
-
-    if not os.path.exists(vnc_file):
-        print(f"Error: {vnc_file} not found!")
-        print(f"Create a {vnc_file} file with format:")
-        print("ip:port-password-hostname")
-        print("Example: 192.168.1.100:5900-mypass-server1")
-        print("Use 'null' for no password: 192.168.1.100:5900-null-server2")
+    if not os.path.exists(args.file):
+        print(f"Error: {args.file} not found!")
         sys.exit(1)
 
     create_screenshot_dir()
 
-    with open(vnc_file, "r") as f:
+    with open(args.file, "r") as f:
         lines = f.readlines()
 
-    servers = []
-    for line in lines:
-        server_info = parse_vnc_line(line)
-        if server_info:
-            servers.append(server_info)
+    servers = [s for s in (parse_vnc_line(l) for l in lines) if s]
 
     if not servers:
-        print("No valid servers found in vnc.txt")
+        print("No valid servers found")
         sys.exit(1)
 
     total_servers = len(servers)
-    workers = 1 if args.no_parallel else args.workers
-    timeout = args.timeout
+    workers = 1 if args.no_parallel else min(args.workers, total_servers)
 
     print(f"Total servers: {total_servers}")
     print(f"Parallel workers: {workers}")
-    print(f"Connection timeout: {timeout}s")
+    print(f"Connection timeout: {args.timeout}s")
+    print(f"Max tasks per child: {args.maxtasksperchild}")
     print(f"Screenshot directory: {SCREENSHOT_DIR}/")
     print("=" * 60)
     print()
 
     start_time = time.time()
 
+    work_items = [
+        (server, i, total_servers, args.timeout, SCREENSHOT_DIR)
+        for i, server in enumerate(servers, 1)
+    ]
+
     successful = 0
     failed = 0
     failed_servers = []
 
     if args.no_parallel:
-        for i, server in enumerate(servers, 1):
-            result = connect_and_screenshot(server, i, total_servers, timeout)
+        for item in work_items:
+            result = single_vnc_connection(item)
             if result[0]:
                 successful += 1
             else:
                 failed += 1
-                failed_servers.append((server, result[2]))
+                failed_servers.append((result[1], result[2]))
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_to_server = {
-                executor.submit(connect_and_screenshot, server, i, total_servers, timeout): (server, i)
-                for i, server in enumerate(servers, 1)
-            }
-
-            for future in as_completed(future_to_server):
-                server, index = future_to_server[future]
-                try:
-                    result = future.result()
-                    if result[0]:
-                        successful += 1
-                    else:
-                        failed += 1
-                        failed_servers.append((result[1], result[2]))
-                except Exception as exc:
+        # maxtasksperchild restarts workers periodically to prevent memory/resource leaks
+        with Pool(processes=workers, maxtasksperchild=args.maxtasksperchild) as pool:
+            for result in pool.imap_unordered(single_vnc_connection, work_items):
+                if result[0]:
+                    successful += 1
+                else:
                     failed += 1
-                    safe_print(f"[{index}/{total_servers}] ERROR: {server['ip']}:{server['port']} - {exc}")
-                    failed_servers.append((server, str(exc)))
+                    failed_servers.append((result[1], result[2]))
 
     elapsed_time = time.time() - start_time
 
@@ -216,20 +187,13 @@ def main():
     print("=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    print(f"Total servers: {total_servers}")
-    print(f"Successful: {successful}")
-    print(f"Failed: {failed}")
-    print(f"Time elapsed: {elapsed_time:.2f} seconds")
-    print(f"Average time per server: {elapsed_time/total_servers:.2f} seconds")
-    print(f"Screenshots saved in: {SCREENSHOT_DIR}/")
-
-    if failed_servers:
-        print()
-        print("FAILED SERVERS:")
-        for server, error in failed_servers:
-            print(f"  - {server['ip']}:{server['port']} - {error}")
-
+    print(f"Total: {total_servers} | Success: {successful} | Failed: {failed}")
+    print(f"Time: {elapsed_time:.2f}s | Avg: {elapsed_time/total_servers:.2f}s per server")
+    print(f"Screenshots: {SCREENSHOT_DIR}/")
     print("=" * 60)
 
 if __name__ == "__main__":
+    # Required for multiprocessing on some platforms
+    import multiprocessing
+    multiprocessing.set_start_method('spawn', force=True)
     main()
