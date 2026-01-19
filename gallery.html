@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VNC Screenshot Gallery</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card: #21262d;
+            --bg-hover: #30363d;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success: #3fb950;
+            --warning: #d29922;
+            --danger: #f85149;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            max-width: 1800px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent), #a371f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-badge {
+            background: var(--bg-card);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        /* Search */
+        .search-container {
+            flex: 1;
+            max-width: 500px;
+            min-width: 250px;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 16px 10px 42px;
+            font-size: 0.95rem;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border-radius: 8px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search-box input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+
+        .search-box::before {
+            content: "🔍";
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .control-group label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .control-group select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        /* Main content */
+        .main {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Gallery Grid */
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Image container with lazy loading */
+        .card-image {
+            position: relative;
+            width: 100%;
+            padding-top: 75%; /* 4:3 aspect ratio */
+            background: var(--bg-secondary);
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .card-image img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .card-image img.thumb {
+            filter: blur(0);
+        }
+
+        .card-image img.loading {
+            opacity: 0;
+        }
+
+        .card-image img.loaded {
+            opacity: 1;
+        }
+
+        .card:hover .card-image img {
+            transform: scale(1.02);
+        }
+
+        /* Skeleton loader */
+        .skeleton {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-hover) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+        }
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Card info */
+        .card-info {
+            padding: 16px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 16px;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            color: var(--text-primary);
+        }
+
+        .info-value.password {
+            color: var(--warning);
+        }
+
+        /* Buttons */
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: #3d444d;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            padding: 32px 0;
+            flex-wrap: wrap;
+        }
+
+        .pagination-btn {
+            padding: 10px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            max-width: 95vw;
+            max-height: 95vh;
+            border-radius: 8px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-close {
+            position: fixed;
+            top: 20px;
+            right: 30px;
+            font-size: 2.5rem;
+            color: #fff;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            z-index: 1001;
+        }
+
+        .modal-close:hover {
+            opacity: 1;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 14px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            display: none;
+            z-index: 2000;
+            font-size: 0.95rem;
+        }
+
+        .toast.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Loading state */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state h2 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-container {
+                max-width: 100%;
+            }
+
+            .controls {
+                justify-content: center;
+            }
+
+            .gallery {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 16px;
+            }
+
+            .main {
+                padding: 16px;
+            }
+        }
+
+        /* Quality indicator */
+        .quality-indicator {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .card:hover .quality-indicator {
+            opacity: 1;
+        }
+
+        /* Keyboard shortcuts hint */
+        .shortcuts-hint {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            display: none;
+        }
+
+        .shortcuts-hint kbd {
+            background: var(--bg-secondary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            font-family: monospace;
+            margin: 0 2px;
+        }
+
+        @media (min-width: 1024px) {
+            .shortcuts-hint {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <h1>🖥️ VNC Gallery</h1>
+                <span class="stats-badge" id="stats">Loading...</span>
+            </div>
+
+            <div class="search-container">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search by IP, port, or password..." autocomplete="off">
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label>Per page:</label>
+                    <select id="pageSize">
+                        <option value="20">20</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label>Quality:</label>
+                    <select id="imageQuality">
+                        <option value="small">Low (Fast)</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="full">Full (Slow)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="gallery" id="gallery">
+            <div class="loading-container">
+                <div class="spinner"></div>
+                <p>Loading screenshots...</p>
+            </div>
+        </div>
+
+        <div class="pagination" id="pagination" style="display: none;">
+            <button class="pagination-btn" id="prevBtn" onclick="previousPage()">
+                ← Previous
+            </button>
+            <span class="page-info" id="pageInfo">Page 1 of 1</span>
+            <button class="pagination-btn" id="nextBtn" onclick="nextPage()">
+                Next →
+            </button>
+        </div>
+    </main>
+
+    <div class="modal" id="imageModal">
+        <span class="modal-close" onclick="closeModal()">×</span>
+        <img class="modal-content" id="modalImage">
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="shortcuts-hint">
+        <kbd>←</kbd> <kbd>→</kbd> Navigate pages &nbsp;|&nbsp; <kbd>Esc</kbd> Close modal
+    </div>
+
+    <script>
+        // State
+        let allScreenshots = [];
+        let filteredScreenshots = [];
+        let currentPage = 1;
+        let pageSize = 50;
+        let imageQuality = 'medium';
+        let searchTimeout = null;
+
+        // Intersection Observer for lazy loading
+        const imageObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    const src = img.dataset.src;
+                    if (src) {
+                        img.src = src;
+                        img.onload = () => {
+                            img.classList.remove('loading');
+                            img.classList.add('loaded');
+                            // Hide skeleton
+                            const skeleton = img.parentElement.querySelector('.skeleton');
+                            if (skeleton) skeleton.style.display = 'none';
+                        };
+                        img.onerror = () => {
+                            // Fallback to original on error
+                            if (img.dataset.fallback) {
+                                img.src = img.dataset.fallback;
+                            }
+                        };
+                        delete img.dataset.src;
+                    }
+                    imageObserver.unobserve(img);
+                }
+            });
+        }, {
+            rootMargin: '100px',
+            threshold: 0.1
+        });
+
+        // Load screenshots
+        async function loadScreenshots() {
+            try {
+                const response = await fetch('/api/screenshots');
+                const data = await response.json();
+                allScreenshots = data.screenshots;
+                filteredScreenshots = allScreenshots;
+
+                document.getElementById('stats').textContent = `${data.total} screenshots`;
+                currentPage = 1;
+                displayCurrentPage();
+                document.getElementById('pagination').style.display = 'flex';
+            } catch (error) {
+                document.getElementById('gallery').innerHTML = `
+                    <div class="empty-state">
+                        <h2>Error loading screenshots</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Display current page
+        function displayCurrentPage() {
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const pageScreenshots = filteredScreenshots.slice(startIndex, endIndex);
+
+            displayScreenshots(pageScreenshots);
+            updatePaginationControls();
+        }
+
+        // Get image URL based on quality setting
+        function getImageUrl(shot, quality) {
+            if (quality === 'full') {
+                return `/screenshots/${shot.filename}`;
+            }
+            return shot[`thumb_${quality}`] || shot.thumb_medium;
+        }
+
+        // Display screenshots
+        function displayScreenshots(screenshots) {
+            const gallery = document.getElementById('gallery');
+
+            if (screenshots.length === 0) {
+                gallery.innerHTML = `
+                    <div class="empty-state">
+                        <h2>No screenshots found</h2>
+                        <p>Try adjusting your search or capture some screenshots first.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            gallery.innerHTML = screenshots.map(shot => `
+                <div class="card">
+                    <div class="card-image" onclick="openModal('/screenshots/${shot.filename}')">
+                        <div class="skeleton"></div>
+                        <img 
+                            class="thumb loading" 
+                            data-src="${getImageUrl(shot, imageQuality)}"
+                            data-fallback="/screenshots/${shot.filename}"
+                            alt="${shot.ip}:${shot.port}"
+                            loading="lazy"
+                        >
+                        <span class="quality-indicator">${imageQuality === 'full' ? 'Full' : 'Compressed'}</span>
+                    </div>
+                    <div class="card-info">
+                        <div class="info-grid">
+                            <span class="info-label">IP</span>
+                            <span class="info-value">${shot.ip}</span>
+                            <span class="info-label">Port</span>
+                            <span class="info-value">${shot.port}</span>
+                            <span class="info-label">Password</span>
+                            <span class="info-value password">${shot.display_password}</span>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" onclick="connectVNC('${shot.ip}', '${shot.port}', '${shot.display_password}')">
+                                ▶ Connect
+                            </button>
+                            <button class="btn btn-secondary" onclick="copyInfo('${shot.ip}:${shot.port}-${shot.display_password}')">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Setup lazy loading for new images
+            document.querySelectorAll('.card-image img[data-src]').forEach(img => {
+                imageObserver.observe(img);
+            });
+        }
+
+        // Search with debounce
+        function searchScreenshots() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+                
+                if (!searchTerm) {
+                    filteredScreenshots = allScreenshots;
+                } else {
+                    filteredScreenshots = allScreenshots.filter(shot =>
+                        shot.ip.toLowerCase().includes(searchTerm) ||
+                        shot.port.includes(searchTerm) ||
+                        shot.display_password.toLowerCase().includes(searchTerm)
+                    );
+                }
+                
+                currentPage = 1;
+                displayCurrentPage();
+                
+                // Update stats
+                document.getElementById('stats').textContent = 
+                    searchTerm 
+                        ? `${filteredScreenshots.length} of ${allScreenshots.length} screenshots`
+                        : `${allScreenshots.length} screenshots`;
+            }, 200);
+        }
+
+        // Pagination
+        function updatePaginationControls() {
+            const totalPages = Math.ceil(filteredScreenshots.length / pageSize) || 1;
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(filteredScreenshots.length / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayCurrentPage();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                displayCurrentPage();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // Page size change
+        document.getElementById('pageSize').addEventListener('change', (e) => {
+            pageSize = parseInt(e.target.value);
+            currentPage = 1;
+            displayCurrentPage();
+        });
+
+        // Image quality change
+        document.getElementById('imageQuality').addEventListener('change', (e) => {
+            imageQuality = e.target.value;
+            displayCurrentPage();
+        });
+
+        // VNC Connection
+        async function connectVNC(ip, port, password) {
+            showToast('Starting VNC connection...');
+
+            try {
+                const response = await fetch('/api/vnc/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip, port, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Opening VNC viewer...');
+                    const url = `/vnc/${ip}/${port}?password=${encodeURIComponent(password)}&ws_port=${data.websockify_port}`;
+                    window.open(url, '_blank', 'width=1280,height=800');
+                } else {
+                    showToast('Error: ' + (data.error || 'Connection failed'));
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message);
+            }
+        }
+
+        // Copy info
+        function copyInfo(info) {
+            navigator.clipboard.writeText(info).then(() => {
+                showToast('Copied to clipboard!');
+            }).catch(() => {
+                showToast('Failed to copy');
+            });
+        }
+
+        // Modal
+        function openModal(imageSrc) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            modalImg.src = imageSrc;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', searchScreenshots);
+
+        document.getElementById('imageModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeModal();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    previousPage();
+                    break;
+                case 'ArrowRight':
+                    nextPage();
+                    break;
+                case 'Escape':
+                    closeModal();
+                    break;
+            }
+        });
+
+        // Initialize
+        loadScreenshots();
+    </script>
+</body>
+</html>
