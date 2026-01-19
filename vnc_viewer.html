@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VNC Viewer - {{ ip }}:{{ port }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #161b22;
+            padding: 12px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-info {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            font-family: 'SF Mono', Monaco, monospace;
+            color: #58a6ff;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+
+        .btn-connect {
+            background: #238636;
+            color: white;
+        }
+
+        .btn-connect:hover {
+            background: #2ea043;
+        }
+
+        .btn-disconnect {
+            background: #da3633;
+            color: white;
+        }
+
+        .btn-disconnect:hover {
+            background: #f85149;
+        }
+
+        .btn-secondary {
+            background: #21262d;
+            color: #e6edf3;
+            border: 1px solid #30363d;
+        }
+
+        .btn-secondary:hover {
+            background: #30363d;
+        }
+
+        .status {
+            padding: 8px 20px;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .status.connecting {
+            background: #1f6feb;
+            color: white;
+        }
+
+        .status.connected {
+            background: #238636;
+            color: white;
+        }
+
+        .status.error {
+            background: #da3633;
+            color: white;
+        }
+
+        .status.ready {
+            background: #21262d;
+            color: #8b949e;
+        }
+
+        .keyboard-toolbar {
+            background: #161b22;
+            padding: 8px 20px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .toolbar-label {
+            color: #8b949e;
+            font-size: 0.8rem;
+            margin-right: 8px;
+        }
+
+        .btn-key {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            background: #21262d;
+            color: #e6edf3;
+            font-family: 'SF Mono', Monaco, monospace;
+            transition: all 0.15s;
+            border: 1px solid #30363d;
+        }
+
+        .btn-key:hover {
+            background: #30363d;
+            border-color: #58a6ff;
+        }
+
+        .btn-key:active {
+            transform: scale(0.95);
+        }
+
+        .btn-key.special {
+            background: #6e40c9;
+            border-color: #6e40c9;
+        }
+
+        .btn-key.special:hover {
+            background: #8957e5;
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background: #30363d;
+            margin: 0 8px;
+        }
+
+        #vnc-container {
+            width: 100%;
+            height: calc(100vh - 140px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #000;
+        }
+
+        #vnc-screen {
+            width: 100%;
+            height: 100%;
+        }
+
+        .message {
+            text-align: center;
+            padding: 60px 40px;
+            color: #8b949e;
+        }
+
+        .message h2 {
+            color: #e6edf3;
+            margin-bottom: 16px;
+        }
+
+        .message.error {
+            color: #f85149;
+        }
+
+        .message.error h2 {
+            color: #f85149;
+        }
+
+        .message code {
+            background: #21262d;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="connection-info">
+            <div class="info-item">
+                <span class="info-label">IP Address</span>
+                <span class="info-value">{{ ip }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Port</span>
+                <span class="info-value">{{ port }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Password</span>
+                <span class="info-value">{{ password if password else 'null' }}</span>
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn btn-connect" id="btnConnect" onclick="connect()">Connect</button>
+            <button class="btn btn-disconnect" id="btnDisconnect" onclick="disconnect()" style="display:none;">Disconnect</button>
+            <button class="btn btn-secondary" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+        </div>
+    </div>
+
+    <div class="status ready" id="status">Ready to connect</div>
+
+    <div class="keyboard-toolbar">
+        <span class="toolbar-label">Keys:</span>
+        <button class="btn-key special" onclick="sendCtrlAltDel()">Ctrl+Alt+Del</button>
+        <button class="btn-key" onclick="sendKeys('ctrl', 'esc')">Ctrl+Esc</button>
+        <button class="btn-key" onclick="sendKeys('alt', 'tab')">Alt+Tab</button>
+        <button class="btn-key" onclick="sendKeys('alt', 'f4')">Alt+F4</button>
+        <div class="divider"></div>
+        <button class="btn-key" onclick="sendKey('meta')">⊞ Win</button>
+        <button class="btn-key" onclick="sendKeys('meta', 'd')">Win+D</button>
+        <button class="btn-key" onclick="sendKeys('meta', 'r')">Win+R</button>
+        <div class="divider"></div>
+        <button class="btn-key" onclick="sendKey('esc')">Esc</button>
+        <button class="btn-key" onclick="sendKey('tab')">Tab</button>
+        <button class="btn-key" onclick="sendKey('enter')">Enter</button>
+        <div class="divider"></div>
+        <button class="btn-key" onclick="sendClipboard()">📋 Paste</button>
+    </div>
+
+    <div id="vnc-container">
+        <div id="vnc-screen"></div>
+    </div>
+
+    <script type="module">
+        import RFB from 'https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/rfb.js';
+
+        let rfb = null;
+        const ip = '{{ ip }}';
+        const port = '{{ port }}';
+        const password = '{{ password }}';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const wsPort = urlParams.get('ws_port') || '6080';
+
+        window.connect = function() {
+            const statusEl = document.getElementById('status');
+            const vncScreen = document.getElementById('vnc-screen');
+
+            vncScreen.innerHTML = '';
+            statusEl.textContent = 'Connecting...';
+            statusEl.className = 'status connecting';
+
+            try {
+                const wsUrl = `ws://${window.location.hostname}:${wsPort}`;
+
+                rfb = new RFB(vncScreen, wsUrl, {
+                    credentials: { password: password !== 'null' ? password : '' }
+                });
+
+                rfb.addEventListener('connect', () => {
+                    statusEl.textContent = `Connected to ${ip}:${port}`;
+                    statusEl.className = 'status connected';
+                    document.getElementById('btnConnect').style.display = 'none';
+                    document.getElementById('btnDisconnect').style.display = 'inline-block';
+                });
+
+                rfb.addEventListener('disconnect', (e) => {
+                    statusEl.textContent = e.detail.clean ? 'Disconnected' : 'Connection lost';
+                    statusEl.className = 'status ready';
+                    document.getElementById('btnConnect').style.display = 'inline-block';
+                    document.getElementById('btnDisconnect').style.display = 'none';
+                });
+
+                rfb.scaleViewport = true;
+                rfb.resizeSession = true;
+
+            } catch (err) {
+                statusEl.textContent = `Error: ${err.message}`;
+                statusEl.className = 'status error';
+
+                vncScreen.innerHTML = `
+                    <div class="message error">
+                        <h2>Connection Error</h2>
+                        <p>${err.message}</p>
+                        <p style="margin-top: 16px;">WebSocket port: <code>${wsPort}</code></p>
+                        <p>Target: <code>${ip}:${port}</code></p>
+                    </div>
+                `;
+            }
+        };
+
+        window.disconnect = function() {
+            if (rfb) {
+                rfb.disconnect();
+                rfb = null;
+            }
+        };
+
+        window.toggleFullscreen = function() {
+            const container = document.getElementById('vnc-container');
+            if (!document.fullscreenElement) {
+                container.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        };
+
+        window.sendCtrlAltDel = function() {
+            if (rfb) rfb.sendCtrlAltDel();
+        };
+
+        window.sendKey = function(key) {
+            if (rfb) rfb.sendKey(getKeyCode(key), key);
+        };
+
+        window.sendKeys = function(...keys) {
+            if (!rfb) return;
+            keys.forEach(key => rfb.sendKey(getKeyCode(key), key, true));
+            keys.reverse().forEach(key => rfb.sendKey(getKeyCode(key), key, false));
+        };
+
+        window.sendClipboard = async function() {
+            if (!rfb) return;
+            try {
+                const text = await navigator.clipboard.readText();
+                rfb.clipboardPasteFrom(text);
+            } catch (err) {
+                alert('Clipboard access denied');
+            }
+        };
+
+        function getKeyCode(key) {
+            const keyMap = {
+                'esc': 0xFF1B, 'tab': 0xFF09, 'enter': 0xFF0D, 'backspace': 0xFF08,
+                'meta': 0xFFEB, 'ctrl': 0xFFE3, 'alt': 0xFFE9, 'shift': 0xFFE1,
+                'f1': 0xFFBE, 'f2': 0xFFBF, 'f3': 0xFFC0, 'f4': 0xFFC1,
+                'f5': 0xFFC2, 'f11': 0xFFC8, 'f12': 0xFFC9
+            };
+            return keyMap[key.toLowerCase()] || key.charCodeAt(0);
+        }
+
+        window.addEventListener('beforeunload', () => { if (rfb) rfb.disconnect(); });
+        window.addEventListener('load', () => setTimeout(connect, 1000));
+    </script>
+</body>
+</html>

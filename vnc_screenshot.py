@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-
+"""
+VNC Screenshot Tool - Subprocess version with hard timeouts
+Uses vncdo CLI in subprocess which can be forcefully killed on timeout
+"""
 
 import os
 import sys
