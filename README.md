@@ -151,6 +151,7 @@ Recommended timeouts:
 -f, --file FILE        VNC server list file (default: vnc.txt)
 -t, --timeout SEC      Connection timeout in seconds (default: 15)
 --no-parallel          Disable parallel processing
+--force                Force re-capture of screenshots even if they already exist
 -h, --help             Show help message
 ```
 
@@ -158,11 +159,30 @@ Recommended timeouts:
 
 The tool will:
 1. Read all servers from vnc.txt
-2. Connect to multiple servers in parallel (based on worker count)
-3. Send a space key press to wake each screen
-4. Capture screenshots simultaneously
-5. Save them to the screenshots/ directory
-6. Display real-time progress and final summary
+2. Check if screenshots already exist (skip by default to save time)
+3. Connect to multiple servers in parallel (based on worker count)
+4. Send a space key press to wake each screen
+5. Capture screenshots simultaneously
+6. Save them to the screenshots/ directory
+7. Display real-time progress and final summary
+
+### Skip Existing Screenshots
+
+By default, the tool will skip servers that already have screenshots saved. This saves significant time when running the tool multiple times on the same server list.
+
+To force re-capture of all screenshots:
+```bash
+python3 vnc_screenshot.py --force
+```
+
+The summary will show how many servers were skipped:
+```
+SUMMARY
+Total servers: 1000
+Successful: 450
+Skipped: 500
+Failed: 50
+```
 
 ## Screenshot Naming
 

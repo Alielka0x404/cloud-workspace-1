@@ -60,6 +60,8 @@ No manual setup required!
 ## Tips
 
 - Screenshots are saved in `screenshots/` directory
+- Tool automatically skips servers that already have screenshots (saves time on re-runs)
+- Use `--force` flag to re-capture all screenshots even if they exist
 - Increase workers (-w) for faster bulk processing
 - Lower timeout (-t) if servers are hanging (default: 15s)
 - Tool automatically skips unresponsive servers after timeout

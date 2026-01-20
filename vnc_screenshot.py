@@ -56,7 +56,7 @@ def safe_print(*args, **kwargs):
     with print_lock:
         print(*args, **kwargs)
 
-def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTION_TIMEOUT):
+def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTION_TIMEOUT, force=False):
     global connection_count
 
     ip = server_info["ip"]
@@ -65,6 +65,15 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
     hostname = server_info["hostname"]
 
     prefix = f"[{index}/{total}]" if index and total else ""
+
+    # Check if screenshot already exists (skip if not forcing re-capture)
+    pass_str = password if password else "null"
+    filename = f"{ip}_{port}-{pass_str}.png"
+    filepath = os.path.join(SCREENSHOT_DIR, filename)
+
+    if not force and os.path.exists(filepath):
+        safe_print(f"{prefix} SKIPPED: {ip}:{port} - Screenshot already exists")
+        return (True, server_info, "skipped")
 
     old_timeout = socket.getdefaulttimeout()
     client = None
@@ -134,6 +143,8 @@ def main():
                         help=f'Connection timeout in seconds (default: {CONNECTION_TIMEOUT})')
     parser.add_argument('--no-parallel', action='store_true',
                         help='Disable parallel processing (sequential mode)')
+    parser.add_argument('--force', action='store_true',
+                        help='Force re-capture of screenshots even if they already exist')
     args = parser.parse_args()
 
     print("VNC Screenshot Tool - Parallel Mode")
@@ -167,10 +178,12 @@ def main():
     total_servers = len(servers)
     workers = 1 if args.no_parallel else args.workers
     timeout = args.timeout
+    force = args.force
 
     print(f"Total servers: {total_servers}")
     print(f"Parallel workers: {workers}")
     print(f"Connection timeout: {timeout}s")
+    print(f"Force re-capture: {'Yes' if force else 'No'}")
     print(f"Screenshot directory: {SCREENSHOT_DIR}/")
     print("=" * 60)
     print()
@@ -178,21 +191,25 @@ def main():
     start_time = time.time()
 
     successful = 0
+    skipped = 0
     failed = 0
     failed_servers = []
 
     if args.no_parallel:
         for i, server in enumerate(servers, 1):
-            result = connect_and_screenshot(server, i, total_servers, timeout)
+            result = connect_and_screenshot(server, i, total_servers, timeout, force)
             if result[0]:
-                successful += 1
+                if result[2] == "skipped":
+                    skipped += 1
+                else:
+                    successful += 1
             else:
                 failed += 1
                 failed_servers.append((server, result[2]))
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_to_server = {
-                executor.submit(connect_and_screenshot, server, i, total_servers, timeout): (server, i)
+                executor.submit(connect_and_screenshot, server, i, total_servers, timeout, force): (server, i)
                 for i, server in enumerate(servers, 1)
             }
 
@@ -201,7 +218,10 @@ def main():
                 try:
                     result = future.result()
                     if result[0]:
-                        successful += 1
+                        if result[2] == "skipped":
+                            skipped += 1
+                        else:
+                            successful += 1
                     else:
                         failed += 1
                         failed_servers.append((result[1], result[2]))
@@ -218,6 +238,7 @@ def main():
     print("=" * 60)
     print(f"Total servers: {total_servers}")
     print(f"Successful: {successful}")
+    print(f"Skipped: {skipped}")
     print(f"Failed: {failed}")
     print(f"Time elapsed: {elapsed_time:.2f} seconds")
     print(f"Average time per server: {elapsed_time/total_servers:.2f} seconds")
