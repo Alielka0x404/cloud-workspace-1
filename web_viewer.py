@@ -13,12 +13,46 @@ from pathlib import Path
 app = Flask(__name__)
 
 SCREENSHOT_DIR = "screenshots"
+VNC_FILE = "vnc.txt"
 WEBSOCKIFY_BASE_PORT = 6080
 MAX_WEBSOCKIFY_PROCESSES = 50
 
 active_proxies = {}
 proxy_lock = threading.Lock()
 next_port = WEBSOCKIFY_BASE_PORT
+
+# Cache for VNC server info (ip:port -> hostname)
+vnc_servers_cache = {}
+
+def load_vnc_servers():
+    """Load VNC servers from vnc.txt and cache hostname info"""
+    global vnc_servers_cache
+    vnc_servers_cache = {}
+
+    if not os.path.exists(VNC_FILE):
+        return
+
+    try:
+        with open(VNC_FILE, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+
+                parts = line.split('-')
+                if len(parts) >= 2:
+                    ip_port = parts[0].strip()
+                    password = parts[1].strip() if len(parts) > 1 else ''
+                    hostname = parts[2].strip() if len(parts) > 2 else ''
+
+                    ip_port_parts = ip_port.split(':')
+                    if len(ip_port_parts) == 2:
+                        ip = ip_port_parts[0]
+                        port = ip_port_parts[1]
+                        key = f"{ip}:{port}"
+                        vnc_servers_cache[key] = hostname
+    except Exception as e:
+        print(f"Error loading vnc.txt: {e}")
 
 def parse_screenshot_filename(filename):
     pattern = r'^(.+?)_(\d+)-(.+?)\.png$'
@@ -29,12 +63,17 @@ def parse_screenshot_filename(filename):
         port = match.group(2)
         password = match.group(3)
 
+        # Get hostname from cache
+        key = f"{ip}:{port}"
+        hostname = vnc_servers_cache.get(key, '')
+
         return {
             'filename': filename,
             'ip': ip,
             'port': port,
             'password': password if password != 'null' else None,
-            'display_password': password
+            'display_password': password,
+            'hostname': hostname
         }
     return None
 
@@ -44,6 +83,9 @@ def index():
 
 @app.route('/api/screenshots')
 def get_screenshots():
+    # Reload VNC servers to get latest hostname info
+    load_vnc_servers()
+
     screenshots = []
 
     if not os.path.exists(SCREENSHOT_DIR):
@@ -53,9 +95,12 @@ def get_screenshots():
         if filename.endswith('.png'):
             info = parse_screenshot_filename(filename)
             if info:
+                filepath = os.path.join(SCREENSHOT_DIR, filename)
+                info['mtime'] = os.path.getmtime(filepath)
                 screenshots.append(info)
 
-    screenshots.sort(key=lambda x: (x['ip'], int(x['port'])))
+    # Sort by modification time (newest first)
+    screenshots.sort(key=lambda x: x['mtime'], reverse=True)
 
     return jsonify({
         'screenshots': screenshots,

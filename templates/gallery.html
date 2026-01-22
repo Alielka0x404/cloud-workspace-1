@@ -270,7 +270,7 @@
     </div>
 
     <div class="search-bar">
-        <input type="text" id="searchInput" placeholder="Search by IP, port, or password...">
+        <input type="text" id="searchInput" placeholder="Search by IP, port, password, or hostname...">
     </div>
 
     <div class="gallery" id="gallery">
@@ -359,11 +359,17 @@
                             <span class="info-label">Password:</span>
                             <span class="info-value password-value">${shot.display_password}</span>
                         </div>
+                        ${shot.hostname ? `
+                        <div class="info-row">
+                            <span class="info-label">Hostname:</span>
+                            <span class="info-value">${shot.hostname}</span>
+                        </div>
+                        ` : ''}
                         <div class="buttons">
                             <button class="btn btn-connect" onclick="connectVNC('${shot.ip}', '${shot.port}', '${shot.display_password}')">
                                 Connect VNC
                             </button>
-                            <button class="btn btn-copy" onclick="copyInfo('${shot.ip}:${shot.port}-${shot.display_password}')">
+                            <button class="btn btn-copy" onclick="copyInfo('${shot.ip}:${shot.port}-${shot.display_password}${shot.hostname ? '-' + shot.hostname : ''}')">
                                 Copy Info
                             </button>
                         </div>
@@ -377,7 +383,8 @@
             filteredScreenshots = allScreenshots.filter(shot =>
                 shot.ip.toLowerCase().includes(searchTerm) ||
                 shot.port.includes(searchTerm) ||
-                shot.display_password.toLowerCase().includes(searchTerm)
+                shot.display_password.toLowerCase().includes(searchTerm) ||
+                (shot.hostname && shot.hostname.toLowerCase().includes(searchTerm))
             );
             currentPage = 1;
             displayCurrentPage();
