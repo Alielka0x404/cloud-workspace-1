@@ -261,9 +261,31 @@
             color: #888;
             font-size: 0.9em;
         }
+
+        .logout-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #cc0000;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: background 0.2s;
+            z-index: 1000;
+        }
+
+        .logout-btn:hover {
+            background: #aa0000;
+        }
     </style>
 </head>
 <body>
+    <a href="/logout" class="logout-btn">Logout</a>
+
     <div class="header">
         <h1>VNC Screenshot Gallery</h1>
         <div class="stats" id="stats">Loading...</div>

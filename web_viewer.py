@@ -7,10 +7,24 @@ import threading
 import time
 import signal
 import atexit
-from flask import Flask, render_template, jsonify, send_from_directory, request
+from flask import Flask, render_template, jsonify, send_from_directory, request, session, redirect, url_for
 from pathlib import Path
+from functools import wraps
 
 app = Flask(__name__)
+app.secret_key = 'vnc_screenshot_secret_key_2024'
+
+# Authentication credentials
+AUTH_USERNAME = 'amin'
+AUTH_PASSWORD = '@Amin123'
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 SCREENSHOT_DIR = "screenshots"
 VNC_FILE = "vnc.txt"
@@ -77,11 +91,32 @@ def parse_screenshot_filename(filename):
         }
     return None
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        if username == AUTH_USERNAME and password == AUTH_PASSWORD:
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Invalid credentials')
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     return render_template('gallery.html')
 
 @app.route('/api/screenshots')
+@login_required
 def get_screenshots():
     # Reload VNC servers to get latest hostname info
     load_vnc_servers()
@@ -108,10 +143,12 @@ def get_screenshots():
     })
 
 @app.route('/screenshots/<path:filename>')
+@login_required
 def serve_screenshot(filename):
     return send_from_directory(SCREENSHOT_DIR, filename)
 
 @app.route('/vnc/<ip>/<port>')
+@login_required
 def vnc_viewer(ip, port):
     password = request.args.get('password', '')
     return render_template('vnc_viewer.html', ip=ip, port=port, password=password)
@@ -204,6 +241,7 @@ def cleanup_all_proxies():
 atexit.register(cleanup_all_proxies)
 
 @app.route('/api/vnc/start', methods=['POST'])
+@login_required
 def start_vnc_proxy():
     data = request.json
     ip = data.get('ip')
@@ -229,11 +267,13 @@ def start_vnc_proxy():
         }), 500
 
 @app.route('/api/vnc/stop/<int:port>', methods=['POST'])
+@login_required
 def stop_vnc_proxy(port):
     cleanup_proxy(port)
     return jsonify({'success': True, 'message': f'Stopped proxy on port {port}'})
 
 @app.route('/api/vnc/active')
+@login_required
 def get_active_proxies():
     with proxy_lock:
         proxies = {
