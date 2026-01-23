@@ -4,21 +4,15 @@ import os
 import sys
 import time
 import argparse
-import threading
 import socket
 import gc
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError
 from vncdotool import api
-from datetime import datetime
 
 SCREENSHOT_DIR = "screenshots"
 VNC_FILE = "vnc.txt"
 DEFAULT_WORKERS = 10
 CONNECTION_TIMEOUT = 15
-
-print_lock = threading.Lock()
-connection_count = 0
-count_lock = threading.Lock()
 
 def create_screenshot_dir():
     if not os.path.exists(SCREENSHOT_DIR):
@@ -52,13 +46,7 @@ def parse_vnc_line(line):
         "hostname": hostname
     }
 
-def safe_print(*args, **kwargs):
-    with print_lock:
-        print(*args, **kwargs)
-
 def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTION_TIMEOUT, force=False):
-    global connection_count
-
     ip = server_info["ip"]
     port = server_info["port"]
     password = server_info["password"]
@@ -72,7 +60,7 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
     filepath = os.path.join(SCREENSHOT_DIR, filename)
 
     if not force and os.path.exists(filepath):
-        safe_print(f"{prefix} SKIPPED: {ip}:{port} - Screenshot already exists")
+        print(f"{prefix} SKIPPED: {ip}:{port} - Screenshot already exists", flush=True)
         return (True, server_info, "skipped")
 
     old_timeout = socket.getdefaulttimeout()
@@ -81,7 +69,7 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
     try:
         connection_string = f"{ip}::{port}"
 
-        safe_print(f"{prefix} Connecting to {ip}:{port}...")
+        print(f"{prefix} Connecting to {ip}:{port}...", flush=True)
 
         socket.setdefaulttimeout(timeout)
 
@@ -105,23 +93,20 @@ def connect_and_screenshot(server_info, index=None, total=None, timeout=CONNECTI
 
         client.captureScreen(filepath)
 
-        safe_print(f"{prefix} SUCCESS: {ip}:{port} -> {filename}")
+        print(f"{prefix} SUCCESS: {ip}:{port} -> {filename}", flush=True)
 
-        with count_lock:
-            connection_count += 1
-            if connection_count % 50 == 0:
-                gc.collect()
+        gc.collect()
 
         return (True, server_info, None)
 
     except socket.timeout:
-        safe_print(f"{prefix} FAILED: {ip}:{port} - Connection timeout ({timeout}s)")
+        print(f"{prefix} FAILED: {ip}:{port} - Connection timeout ({timeout}s)", flush=True)
         return (False, server_info, f"Connection timeout ({timeout}s)")
     except TimeoutError as e:
-        safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
+        print(f"{prefix} FAILED: {ip}:{port} - {str(e)}", flush=True)
         return (False, server_info, str(e))
     except Exception as e:
-        safe_print(f"{prefix} FAILED: {ip}:{port} - {str(e)}")
+        print(f"{prefix} FAILED: {ip}:{port} - {str(e)}", flush=True)
         return (False, server_info, str(e))
     finally:
         if client:
@@ -207,7 +192,7 @@ def main():
                 failed += 1
                 failed_servers.append((server, result[2]))
     else:
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             future_to_server = {
                 executor.submit(connect_and_screenshot, server, i, total_servers, timeout, force): (server, i)
                 for i, server in enumerate(servers, 1)
@@ -227,7 +212,7 @@ def main():
                         failed_servers.append((result[1], result[2]))
                 except Exception as exc:
                     failed += 1
-                    safe_print(f"[{index}/{total_servers}] ERROR: {server['ip']}:{server['port']} - {exc}")
+                    print(f"[{index}/{total_servers}] ERROR: {server['ip']}:{server['port']} - {exc}", flush=True)
                     failed_servers.append((server, str(exc)))
 
     elapsed_time = time.time() - start_time
